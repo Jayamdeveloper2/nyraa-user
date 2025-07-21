@@ -13,6 +13,16 @@ import { PurchaseNowButton, AddToCartButton, PurchaseNowTwoButton } from "../com
 import IconLink from "../components/ui/Icons";
 import "./ProductList.css";
 
+// Generate slug from name
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 -]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+};
+
 const ProductList = () => {
   const { category } = useParams();
   const navigate = useNavigate();
@@ -76,11 +86,13 @@ const ProductList = () => {
       const firstVariant = variants[0] || {};
       return {
         id: item.id?.toString(),
+        slug: item.slug || generateSlug(item.name), // Add slug
         name: item.name || "Unnamed Product",
         price: firstVariant.price || item.price || 0,
         originalPrice: firstVariant.originalPrice || item.originalPrice || firstVariant.price || 0,
         discount: item.discount || 0,
         category: item.category || "Uncategorized",
+        categorySlug: item.cat_slug || generateSlug(item.category || "uncategorized"), // Add category slug
         size: variants
           .map((v) => v.size)
           .filter(Boolean)
@@ -122,7 +134,7 @@ const ProductList = () => {
   const filterOptions = useMemo(() => {
     const productsToFilter =
       category && category.toLowerCase() !== "dresses"
-        ? products.filter((p) => p.category?.slug?.toLowerCase() === category.toLowerCase())
+        ? products.filter((p) => p.categorySlug?.toLowerCase() === category.toLowerCase()) // Use categorySlug
         : products;
 
     const counts = {
@@ -188,7 +200,7 @@ const ProductList = () => {
 
       let result = [...products];
       if (category && category.toLowerCase() !== "dresses") {
-        result = result.filter((p) => p.category?.slug?.toLowerCase() === category.toLowerCase());
+        result = result.filter((p) => p.categorySlug?.toLowerCase() === category.toLowerCase()); // Use categorySlug
       }
       if (newFilters.availability.length > 0)
         result = result.filter((p) => newFilters.availability.includes(p.availability));
@@ -247,7 +259,8 @@ const ProductList = () => {
 
   const handleProductClick = useCallback(
     (product) => {
-      navigate(`/product/${product.id}`, { state: { product } });
+      // Navigate using slug instead of id
+      navigate(`/product/${product.slug}`, { state: { product } });
     },
     [navigate],
   );
@@ -456,7 +469,7 @@ const ProductList = () => {
                         </div>
                         <PurchaseNowButton
                           label="Buy Now"
-                          productId={product.id}
+                          productId={product.slug} // Use slug instead of id
                           onClick={() => handleShopNow(product)}
                         />
                       </div>
@@ -492,7 +505,7 @@ const ProductList = () => {
             <div className="row">
               <div className="col-md-6">
                 <img
-                  src={selectedProduct.image}
+                  src={selectedProduct.image || "/placeholder.svg"}
                   alt={selectedProduct.name}
                   className="img-fluid"
                   style={{ maxHeight: "300px", objectFit: "contain", width: "100%" }}
@@ -546,7 +559,7 @@ const ProductList = () => {
                     />
                     <PurchaseNowTwoButton
                       label="Buy Now"
-                      productId={selectedProduct.id}
+                      productId={selectedProduct.slug} // Use slug instead of id
                       onClick={() => handleBuyNow(selectedProduct)}
                     />
                   </div>

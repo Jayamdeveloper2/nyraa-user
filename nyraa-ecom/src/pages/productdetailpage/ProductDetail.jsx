@@ -13,8 +13,18 @@ import { AddToCartButton, PurchaseNowTwoButton } from "../../components/ui/Butto
 import IconLink from "../../components/ui/Icons";
 import "./ProductDetail.css";
 
+// Generate slug from name
+const generateSlug = (name) => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9 -]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+};
+
 const ProductDetail = () => {
-  const { id } = useParams();
+  const { slug } = useParams(); // Changed from id to slug
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const cartItems = useSelector((state) => state.cart.items) || [];
@@ -43,7 +53,8 @@ const ProductDetail = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`http://localhost:5000/api/products/${id}`);
+        // Use slug instead of id in the API call
+        const response = await fetch(`http://localhost:5000/api/products/${slug}`);
         if (!response.ok) {
           throw new Error(`Failed to fetch product: ${response.statusText}`);
         }
@@ -61,13 +72,15 @@ const ProductDetail = () => {
           : {};
 
         const transformedProduct = {
-          id: item.id?.toString() || id,
+          id: item.id?.toString() || item.slug,
+          slug: item.slug || generateSlug(item.name), // Add slug to product
           name: item.name || "Unnamed Product",
           price: firstVariant.price || item.price || 0,
           originalPrice: firstVariant.originalPrice || item.originalPrice || firstVariant.price || 0,
           discount: item.discount || 0,
           category: typeof item.category === 'string' ? item.category : 
                     (typeof item.categoryName === 'string' ? item.categoryName : "Uncategorized"),
+          categorySlug: item.cat_slug || generateSlug(item.categoryName || item.category || "uncategorized"),
           size: variants
             .map((v) => v.size)
             .filter(Boolean)
@@ -105,7 +118,7 @@ const ProductDetail = () => {
     };
     fetchProduct();
     window.scrollTo(0, 0);
-  }, [id]);
+  }, [slug]); // Changed dependency from id to slug
 
   useEffect(() => {
     if (thumbnailsContainerRef.current) {
@@ -268,7 +281,7 @@ const ProductDetail = () => {
           { label: "Home", link: "/home" },
           {
             label: capitalizeCategory(product.category),
-            link: `/collections/${product.category}`,
+            link: `/collections/${product.categorySlug}`, // Use category slug
           },
           { label: product.name },
         ]}
@@ -468,7 +481,7 @@ const ProductDetail = () => {
                   />
                   <PurchaseNowTwoButton
                     label="Buy Now"
-                    productId={product.id}
+                    productId={product.slug} // Use slug instead of id
                     onClick={handleBuyNow}
                     showIcon={true}
                   />
