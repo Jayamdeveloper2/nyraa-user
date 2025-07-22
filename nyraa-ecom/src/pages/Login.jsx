@@ -1,143 +1,241 @@
-import React, { useState,useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { User, Lock, Mail, LogIn, Eye, EyeOff } from "lucide-react";
-import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
-import axios from 'axios';
-import '../styles/Login.css';
+
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
+import { User, Lock, Mail, LogIn, Eye, EyeOff, AlertCircle, CheckCircle } from "lucide-react"
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google"
+import axios from "axios"
+import "../styles/Login.css"
 
 const Login = () => {
-  const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [forgotPassword, setForgotPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotError, setForgotError] = useState("");
-  const [forgotSuccess, setForgotSuccess] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
-  const navigate = useNavigate();
+  const [email, setEmail] = useState("")
+  const [otp, setOtp] = useState("")
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [forgotPassword, setForgotPassword] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState("")
+  const [forgotError, setForgotError] = useState("")
+  const [forgotSuccess, setForgotSuccess] = useState("")
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpVerified, setOtpVerified] = useState(false)
+  const [countdown, setCountdown] = useState(0)
+  const navigate = useNavigate()
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    let timer
+    if (countdown > 0) {
+      timer = setTimeout(() => setCountdown(countdown - 1), 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [countdown])
+
+  const clearMessages = () => {
+    setError("")
+    setSuccess("")
+    setForgotError("")
+    setForgotSuccess("")
+  }
 
   const handleSendOtp = async (e) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
+    e.preventDefault()
+    clearMessages()
+    setIsLoading(true)
 
     if (!email) {
-      setError("Please enter your email");
-      setIsLoading(false);
-      return;
+      setError("Please enter your email")
+      setIsLoading(false)
+      return
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError("Please enter a valid email address")
+      setIsLoading(false)
+      return
     }
 
     try {
-      await axios.post('http://localhost:5000/api/auth/send-otp', { email });
-      setOtpSent(true);
-      setIsLoading(false);
+      const response = await axios.post("http://localhost:5000/api/auth/send-otp", {
+        email: email.toLowerCase().trim(),
+      })
+
+      if (response.data.success) {
+        setOtpSent(true)
+        setSuccess("OTP sent to your email successfully!")
+        setCountdown(60) // 60 second countdown
+      }
     } catch (error) {
-      setError(error.response?.data?.message || "Failed to send OTP");
-      setIsLoading(false);
+      console.error("Send OTP error:", error)
+      setError(error.response?.data?.message || "Failed to send OTP. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
+    e.preventDefault()
+    clearMessages()
+    setIsLoading(true)
 
     if (!otp) {
-      setError("Please enter the OTP");
-      setIsLoading(false);
-      return;
+      setError("Please enter the OTP")
+      setIsLoading(false)
+      return
+    }
+
+    if (otp.length !== 6) {
+      setError("OTP must be 6 digits")
+      setIsLoading(false)
+      return
     }
 
     try {
-      await axios.post('http://localhost:5000/api/auth/verify-otp', { email, otp });
-      setOtpVerified(true);
-      setIsLoading(false);
+      const response = await axios.post("http://localhost:5000/api/auth/verify-otp", {
+        email: email.toLowerCase().trim(),
+        otp: otp.trim(),
+      })
+
+      if (response.data.success) {
+        // If token is returned, user is automatically logged in
+        if (response.data.token) {
+          localStorage.setItem("token", response.data.token)
+          localStorage.setItem("userData", JSON.stringify(response.data.user))
+          localStorage.setItem("isLoggedIn", "true")
+          setSuccess("Login successful! Redirecting...")
+          setTimeout(() => navigate("/account/profile"), 1500)
+        } else {
+          setOtpVerified(true)
+          setSuccess("OTP verified successfully! Please set your password.")
+        }
+      }
     } catch (error) {
-      setError(error.response?.data?.message || "Failed to verify OTP");
-      setIsLoading(false);
+      console.error("Verify OTP error:", error)
+      setError(error.response?.data?.message || "Failed to verify OTP. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
+    e.preventDefault()
+    clearMessages()
+    setIsLoading(true)
 
     if (!email || !password) {
-      setError("Please enter both email and password");
-      setIsLoading(false);
-      return;
+      setError("Please enter both email and password")
+      setIsLoading(false)
+      return
     }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        email,
-        password
-      });
+      const response = await axios.post("http://localhost:5000/api/auth/login", {
+        email: email.toLowerCase().trim(),
+        password,
+      })
 
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("userData", JSON.stringify(response.data.user));
-      localStorage.setItem("isLoggedIn", "true");
-
-      navigate("/account/profile");
+      if (response.data.success) {
+        localStorage.setItem("token", response.data.token)
+        localStorage.setItem("userData", JSON.stringify(response.data.user))
+        localStorage.setItem("isLoggedIn", "true")
+        setSuccess("Login successful! Redirecting...")
+        setTimeout(() => navigate("/account/profile"), 1500)
+      }
     } catch (error) {
-      setError(error.response?.data?.message || "An error occurred during login");
-      setIsLoading(false);
+      console.error("Login error:", error)
+      setError(error.response?.data?.message || "Login failed. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/google', {
-        token: credentialResponse.credential
-      });
+      clearMessages()
+      setIsLoading(true)
 
-      console.log('Google login response:', response.data); 
+      const response = await axios.post("http://localhost:5000/api/auth/google", {
+        token: credentialResponse.credential,
+      })
 
-      localStorage.setItem("token", response.data.token);
-      localStorage.setItem("userData", JSON.stringify(response.data.user));
-      localStorage.setItem("isLoggedIn", "true");
-
-      navigate("/account/profile");
+      if (response.data.success) {
+        localStorage.setItem("token", response.data.token)
+        localStorage.setItem("userData", JSON.stringify(response.data.user))
+        localStorage.setItem("isLoggedIn", "true")
+        setSuccess("Google login successful! Redirecting...")
+        setTimeout(() => navigate("/account/profile"), 1500)
+      }
     } catch (error) {
-      console.error('Google login error:', error);
-      setError(error.response?.data?.message || "Google login failed");
+      console.error("Google login error:", error)
+      setError(error.response?.data?.message || "Google login failed. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
 
   const handleGoogleError = () => {
-    console.error('Google login failed');
-    setError("Google login failed. Please try again.");
-  };
+    console.error("Google login failed")
+    setError("Google login failed. Please try again.")
+  }
 
   const handleForgotPasswordSubmit = async (e) => {
-    e.preventDefault();
-    setForgotError("");
-    setForgotSuccess("");
-    setIsLoading(true);
+    e.preventDefault()
+    setForgotError("")
+    setForgotSuccess("")
+    setIsLoading(true)
+
+    if (!forgotEmail) {
+      setForgotError("Please enter your email")
+      setIsLoading(false)
+      return
+    }
 
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/forgot-password', {
-        email: forgotEmail
-      });
-      setForgotSuccess(response.data.message);
-      setIsLoading(false);
+      const response = await axios.post("http://localhost:5000/api/auth/forgot-password", {
+        email: forgotEmail.toLowerCase().trim(),
+      })
+
+      if (response.data.message) {
+        setForgotSuccess(response.data.message)
+      }
     } catch (error) {
-      setForgotError(error.response?.data?.message || "Failed to send reset email");
-      setIsLoading(false);
+      setForgotError(error.response?.data?.message || "Failed to send reset email")
+    } finally {
+      setIsLoading(false)
     }
-  };
+  }
+
+  const handleResendOtp = async () => {
+    if (countdown > 0) return
+
+    clearMessages()
+    setIsLoading(true)
+
+    try {
+      const response = await axios.post("http://localhost:5000/api/auth/send-otp", {
+        email: email.toLowerCase().trim(),
+      })
+
+      if (response.data.success) {
+        setSuccess("New OTP sent to your email!")
+        setCountdown(60)
+      }
+    } catch (error) {
+      setError(error.response?.data?.message || "Failed to resend OTP")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
-  // Clear any existing auth data when component mounts
-  localStorage.removeItem("token");
-  localStorage.removeItem("userData");
-  localStorage.removeItem("isLoggedIn");
-}, []);
+    // Clear any existing auth data when component mounts
+    localStorage.removeItem("token")
+    localStorage.removeItem("userData")
+    localStorage.removeItem("isLoggedIn")
+  }, [])
 
   return (
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
@@ -157,8 +255,15 @@ const Login = () => {
                 <div className="card-body p-4 p-lg-5">
                   {error && (
                     <div className="alert alert-danger d-flex align-items-center" role="alert">
-                      <div className="me-2">⚠️</div>
+                      <AlertCircle size={18} className="me-2" />
                       <div>{error}</div>
+                    </div>
+                  )}
+
+                  {success && (
+                    <div className="alert alert-success d-flex align-items-center" role="alert">
+                      <CheckCircle size={18} className="me-2" />
+                      <div>{success}</div>
                     </div>
                   )}
 
@@ -184,6 +289,7 @@ const Login = () => {
                                 required
                               />
                             </div>
+                            <div className="form-text mt-1">We'll send you an OTP to verify your email</div>
                           </div>
 
                           <button
@@ -192,7 +298,11 @@ const Login = () => {
                             disabled={isLoading}
                           >
                             {isLoading ? (
-                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
                             ) : (
                               <Mail size={18} className="me-2" />
                             )}
@@ -203,7 +313,10 @@ const Login = () => {
                             <a
                               href="#"
                               className="text-decoration-none small text-primary"
-                              onClick={() => setForgotPassword(true)}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setForgotPassword(true)
+                              }}
                             >
                               Forgot Password?
                             </a>
@@ -225,35 +338,55 @@ const Login = () => {
                                 id="otp"
                                 placeholder="Enter the 6-digit OTP"
                                 value={otp}
-                                onChange={(e) => setOtp(e.target.value)}
+                                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                maxLength="6"
                                 required
                               />
                             </div>
-                            <div className="form-text mt-1">
-                              Enter the OTP sent to {email}.
-                            </div>
+                            <div className="form-text mt-1">Enter the OTP sent to {email}</div>
                           </div>
 
                           <button
                             type="submit"
-                            className="btn btn-primary w-100 py-3 d-flex align-items-center justify-content-center"
+                            className="btn btn-primary w-100 py-3 d-flex align-items-center justify-content-center mb-3"
                             disabled={isLoading}
                           >
                             {isLoading ? (
-                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
                             ) : (
                               <LogIn size={18} className="me-2" />
                             )}
                             {isLoading ? "Verifying..." : "Verify OTP"}
                           </button>
 
-                          <div className="text-center mt-4">
+                          <div className="text-center">
+                            {countdown > 0 ? (
+                              <span className="text-muted small">Resend OTP in {countdown}s</span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-link p-0 text-decoration-none small"
+                                onClick={handleResendOtp}
+                                disabled={isLoading}
+                              >
+                                Resend OTP
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="text-center mt-3">
                             <a
                               href="#"
                               className="text-decoration-none small text-primary"
-                              onClick={() => {
-                                setOtpSent(false);
-                                setOtp("");
+                              onClick={(e) => {
+                                e.preventDefault()
+                                setOtpSent(false)
+                                setOtp("")
+                                clearMessages()
                               }}
                             >
                               Back to Email
@@ -288,7 +421,10 @@ const Login = () => {
                               <a
                                 href="#"
                                 className="text-decoration-none small text-primary"
-                                onClick={() => setForgotPassword(true)}
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  setForgotPassword(true)
+                                }}
                               >
                                 Forgot Password?
                               </a>
@@ -311,18 +447,18 @@ const Login = () => {
                                 onClick={() => setShowPassword(!showPassword)}
                                 style={{ cursor: "pointer" }}
                               >
-                                {showPassword ? <EyeOff size={18} className="text-muted" /> : <Eye size={18} className="text-muted" />}
+                                {showPassword ? (
+                                  <EyeOff size={18} className="text-muted" />
+                                ) : (
+                                  <Eye size={18} className="text-muted" />
+                                )}
                               </span>
                             </div>
                           </div>
 
                           <div className="mb-4">
                             <div className="form-check">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                id="rememberMe"
-                              />
+                              <input className="form-check-input" type="checkbox" id="rememberMe" />
                               <label className="form-check-label" htmlFor="rememberMe">
                                 Remember me
                               </label>
@@ -335,7 +471,11 @@ const Login = () => {
                             disabled={isLoading}
                           >
                             {isLoading ? (
-                              <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                              <span
+                                className="spinner-border spinner-border-sm me-2"
+                                role="status"
+                                aria-hidden="true"
+                              ></span>
                             ) : (
                               <LogIn size={18} className="me-2" />
                             )}
@@ -371,13 +511,13 @@ const Login = () => {
                     <>
                       {forgotError && (
                         <div className="alert alert-danger d-flex align-items-center" role="alert">
-                          <div className="me-2">⚠️</div>
+                          <AlertCircle size={18} className="me-2" />
                           <div>{forgotError}</div>
                         </div>
                       )}
                       {forgotSuccess && (
                         <div className="alert alert-success d-flex align-items-center" role="alert">
-                          <div className="me-2">✅</div>
+                          <CheckCircle size={18} className="me-2" />
                           <div>{forgotSuccess}</div>
                         </div>
                       )}
@@ -400,9 +540,7 @@ const Login = () => {
                               required
                             />
                           </div>
-                          <div className="form-text mt-1">
-                            Enter your email to receive a password reset link.
-                          </div>
+                          <div className="form-text mt-1">Enter your email to receive a password reset link.</div>
                         </div>
 
                         <button
@@ -411,7 +549,11 @@ const Login = () => {
                           disabled={isLoading}
                         >
                           {isLoading ? (
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            <span
+                              className="spinner-border spinner-border-sm me-2"
+                              role="status"
+                              aria-hidden="true"
+                            ></span>
                           ) : (
                             <Mail size={18} className="me-2" />
                           )}
@@ -422,7 +564,11 @@ const Login = () => {
                           <a
                             href="#"
                             className="text-decoration-none small text-primary"
-                            onClick={() => setForgotPassword(false)}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              setForgotPassword(false)
+                              clearMessages()
+                            }}
                           >
                             Back to Login
                           </a>
@@ -437,7 +583,7 @@ const Login = () => {
         </div>
       </div>
     </GoogleOAuthProvider>
-  );
-};
+  )
+}
 
-export default Login;
+export default Login
