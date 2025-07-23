@@ -1,193 +1,240 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Navbar as BootstrapNavbar,
-  Nav,
-  Button,
-  Image,
-  Offcanvas,
-  Dropdown,
-} from "react-bootstrap";
-import { useNavigate, useLocation, NavLink } from "react-router-dom";
-import { useSelector } from "react-redux";
-import IconLink from '../ui/Icons';
-import SearchSuggestions from "../Search/SearchSuggestions";
-import ConfirmationModal from "../ui/ConfirmationModal";
-import "./NavbarComp.css";
+import { useState, useEffect, useRef } from "react"
+import { Navbar as BootstrapNavbar, Nav, Button, Image, Offcanvas, Dropdown } from "react-bootstrap"
+import { useNavigate, useLocation, NavLink } from "react-router-dom"
+import { useSelector } from "react-redux"
+import IconLink from "../ui/Icons"
+import SearchSuggestions from "../Search/SearchSuggestions"
+import ConfirmationModal from "../ui/ConfirmationModal"
+import "./NavbarComp.css"
 
 const Navbar = () => {
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [offcanvasShow, setOffcanvasShow] = useState(false);
-  const [mobileDropdownOpen, setMobileDropdownOpen] = useState({ more: false });
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 992);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [offcanvasShow, setOffcanvasShow] = useState(false)
+  const [mobileDropdownOpen, setMobileDropdownOpen] = useState({ more: false })
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 992)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [modalConfig, setModalConfig] = useState({
-    actionType: 'logout',
-    title: 'Confirm Logout'
-  });
+    actionType: "logout",
+    title: "Confirm Logout",
+  })
+  const [userData, setUserData] = useState({})
 
-  const cartCount = useSelector((state) => state.cart.items.reduce((sum, item) => sum + item.quantity, 0));
-  const wishlistCount = useSelector((state) => state.wishlist.items.length);
-  const searchContainerRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const cartCount = useSelector((state) => state.cart.items.reduce((sum, item) => sum + item.quantity, 0))
+  const wishlistCount = useSelector((state) => state.wishlist.items.length)
+  const searchContainerRef = useRef(null)
+  const searchInputRef = useRef(null)
 
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate = useNavigate()
+  const location = useLocation()
 
   useEffect(() => {
     const checkLoginStatus = () => {
-      const savedLoginStatus = localStorage.getItem("isLoggedIn");
-      setIsLoggedIn(savedLoginStatus === "true");
-    };
+      const savedLoginStatus = localStorage.getItem("isLoggedIn")
+      const savedUserData = localStorage.getItem("userData")
+      const token = localStorage.getItem("token")
+
+      const isAuthenticated = savedLoginStatus === "true" && token
+      setIsLoggedIn(isAuthenticated)
+
+      if (savedUserData) {
+        try {
+          setUserData(JSON.parse(savedUserData))
+        } catch (error) {
+          console.error("Error parsing user data:", error)
+          setUserData({})
+        }
+      } else {
+        setUserData({})
+      }
+    }
 
     const handleResize = () => {
-      setIsMobile(window.innerWidth < 992);
-    };
+      setIsMobile(window.innerWidth < 992)
+    }
 
-    checkLoginStatus();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [location]);
+    checkLoginStatus()
+    window.addEventListener("resize", handleResize)
+
+    // Listen for storage changes to update login status across tabs
+    const handleStorageChange = (e) => {
+      if (e.key === "isLoggedIn" || e.key === "token" || e.key === "userData") {
+        checkLoginStatus()
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+
+    return () => {
+      window.removeEventListener("resize", handleResize)
+      window.removeEventListener("storage", handleStorageChange)
+    }
+  }, [location])
 
   useEffect(() => {
     if (showSearch && searchInputRef.current) {
       setTimeout(() => {
-        searchInputRef.current.focus();
-      }, 100);
+        searchInputRef.current.focus()
+      }, 100)
     }
-  }, [showSearch]);
+  }, [showSearch])
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
         searchContainerRef.current &&
         !searchContainerRef.current.contains(event.target) &&
-        !event.target.closest('.search-toggle') &&
-        !event.target.closest('.search-suggestions')
+        !event.target.closest(".search-toggle") &&
+        !event.target.closest(".search-suggestions")
       ) {
-        setShowSearch(false);
-        setShowSuggestions(false);
-        setSearchQuery("");
+        setShowSearch(false)
+        setShowSuggestions(false)
+        setSearchQuery("")
       }
-    };
+    }
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  // Check if user profile is complete
+  const isProfileComplete = () => {
+    return userData.name && userData.name.trim() !== "" && userData.phone && userData.phone.trim() !== ""
+  }
+
+  // Handle protected navigation (cart, wishlist)
+  const handleProtectedNavigation = (path) => {
+    if (!isLoggedIn) {
+      navigate("/login")
+      return
+    }
+
+    if (!isProfileComplete()) {
+      // Store the intended destination
+      sessionStorage.setItem("redirectAfterProfile", path)
+      navigate("/account/profile?complete=true")
+      return
+    }
+
+    navigate(path)
+    setOffcanvasShow(false)
+    setUserDropdownOpen(false)
+  }
 
   const toggleSearch = () => {
-    setShowSearch((prev) => !prev);
+    setShowSearch((prev) => !prev)
     if (!showSearch) {
-      setSearchQuery("");
-      setShowSuggestions(false);
+      setSearchQuery("")
+      setShowSuggestions(false)
     }
-  };
+  }
 
   const handleSearchChange = (e) => {
-    setSearchQuery(e.target.value);
-    setShowSuggestions(e.target.value.trim().length > 0);
-  };
+    setSearchQuery(e.target.value)
+    setShowSuggestions(e.target.value.trim().length > 0)
+  }
 
   const handleSearchSubmit = (e) => {
-    e.preventDefault();
+    e.preventDefault()
     if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-      setSearchQuery("");
-      setShowSearch(false);
-      setShowSuggestions(false);
-      setOffcanvasShow(false);
+      navigate(`/search?q=${encodeURIComponent(searchQuery)}`)
+      setSearchQuery("")
+      setShowSearch(false)
+      setShowSuggestions(false)
+      setOffcanvasShow(false)
     }
-  };
+  }
 
   const handleSuggestionSelect = () => {
-    setShowSuggestions(false);
-    setSearchQuery("");
-    setShowSearch(false);
-    setOffcanvasShow(false);
-  };
+    setShowSuggestions(false)
+    setSearchQuery("")
+    setShowSearch(false)
+    setOffcanvasShow(false)
+  }
 
   const closeSuggestions = () => {
-    setShowSuggestions(false);
-  };
+    setShowSuggestions(false)
+  }
 
   const toggleMobileDropdown = (key) => {
-    setMobileDropdownOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+    setMobileDropdownOpen((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
 
   const toggleUserDropdown = () => {
     if (!isMobile) {
-      setUserDropdownOpen((prev) => !prev);
+      setUserDropdownOpen((prev) => !prev)
     } else {
-      handleAccountClick();
+      handleAccountClick()
     }
-  };
+  }
 
   const handleNavigation = (path) => {
-    navigate(path);
-    setOffcanvasShow(false);
-    setUserDropdownOpen(false);
-    setMobileDropdownOpen({ more: false });
-  };
+    navigate(path)
+    setOffcanvasShow(false)
+    setUserDropdownOpen(false)
+    setMobileDropdownOpen({ more: false })
+  }
 
   const handleAccountClick = () => {
     if (isLoggedIn) {
-      handleNavigation("/account/profile");
+      handleNavigation("/account/profile")
     } else {
-      handleNavigation("/login");
+      handleNavigation("/login")
     }
-  };
+  }
 
   const handleLogoutPrompt = () => {
     setModalConfig({
-      actionType: 'logout',
-      title: 'Confirm Logout'
-    });
-    setShowConfirmModal(true);
-    setUserDropdownOpen(false);
+      actionType: "logout",
+      title: "Confirm Logout",
+    })
+    setShowConfirmModal(true)
+    setUserDropdownOpen(false)
     if (isMobile) {
-      setOffcanvasShow(false);
+      setOffcanvasShow(false)
     }
-  };
-
- const handleConfirmAction = () => {
-  const { actionType } = modalConfig;
-
-  if (actionType === 'logout') {
-    // Clear all auth-related data first
-    localStorage.removeItem("token");
-    localStorage.removeItem("userData");
-    localStorage.removeItem("isLoggedIn");
-    
-    // Update state before navigation
-    setIsLoggedIn(false);
-    
-    // Force a state update before navigation
-    setTimeout(() => {
-      navigate("/login", { replace: true }); 
-    }, 0);
   }
 
-  setShowConfirmModal(false);
-};
+  const handleConfirmAction = () => {
+    const { actionType } = modalConfig
+
+    if (actionType === "logout") {
+      // Clear all auth-related data
+      localStorage.removeItem("token")
+      localStorage.removeItem("userData")
+      localStorage.removeItem("isLoggedIn")
+      sessionStorage.clear()
+
+      // Update state immediately
+      setIsLoggedIn(false)
+      setUserData({})
+
+      // Close modal first
+      setShowConfirmModal(false)
+
+      // Force navigation with page reload to ensure clean state
+      window.location.href = "/nyraa/login"
+    }
+  }
 
   const handleCancelAction = () => {
-    setShowConfirmModal(false);
-  };
+    setShowConfirmModal(false)
+  }
 
   const getActiveClass = (path) => {
-    const currentPath = location.pathname;
-    return currentPath === path || (path === "/home" && currentPath === "/") ? "active" : "";
-  };
+    const currentPath = location.pathname
+    return currentPath === path || (path === "/home" && currentPath === "/") ? "active" : ""
+  }
 
   const desktopNavLinks = [
     { path: "/home", label: "Home" },
     { path: "/collections/dresses", label: "All Dresses" },
     { path: "/collections/tops", label: "Tops" },
     { path: "/collections/pants", label: "Pants" },
-  ];
+  ]
 
   const moreCategories = [
     { path: "/collections/jackets", label: "Jackets" },
@@ -195,12 +242,18 @@ const Navbar = () => {
     { path: "/collections/activewear", label: "Activewear" },
     { path: "/collections/accessories", label: "Accessories" },
     { path: "/checkout", label: "Checkout" },
-  ];
+  ]
 
   return (
     <>
       <style>
         {`
+          :root {
+            --primary-pink: #D0779B;
+            --primary-pink-light: #E8A5C4;
+            --primary-pink-dark: #B8657F;
+          }
+
           .premium-search-container {
             position: absolute;
             top: 0;
@@ -236,7 +289,7 @@ const Navbar = () => {
           }
           
           .premium-search-form:focus-within {
-            border-color: var(--accent);
+            border-color: var(--primary-pink);
           }
           
           .premium-search-input {
@@ -262,7 +315,7 @@ const Navbar = () => {
           .premium-search-btn {
             background: transparent;
             border: none;
-            color: var(--accent);
+            color: var(--primary-pink);
             font-size: 1.25rem;
             padding: 0.5rem;
             cursor: pointer;
@@ -290,7 +343,7 @@ const Navbar = () => {
           }
           
           .premium-search-close:hover {
-            color: var(--accent);
+            color: var(--primary-pink);
           }
           
           .premium-search-clear {
@@ -304,7 +357,7 @@ const Navbar = () => {
           }
           
           .premium-search-clear:hover {
-            color: var(--accent);
+            color: var(--primary-pink);
           }
           
           .search-toggle {
@@ -312,7 +365,7 @@ const Navbar = () => {
           }
           
           .search-toggle:hover {
-            color: var(--accent) !important;
+            color: var(--primary-pink) !important;
           }
           
           .search-toggle .icon-outlined {
@@ -320,7 +373,7 @@ const Navbar = () => {
           }
           
           .search-toggle:hover .icon-outlined {
-            stroke: var(--accent) !important;
+            stroke: var(--primary-pink) !important;
           }
           
           .search-overlay {
@@ -371,8 +424,67 @@ const Navbar = () => {
           }
           
           .trending-tag:hover {
-            background-color: var(--tag-hover);
-            color: var(--accent);
+            background-color: var(--primary-pink-light);
+            color: var(--primary-pink-dark);
+          }
+
+          .nav-icon:hover {
+            color: var(--primary-pink) !important;
+          }
+
+          .nav-link:hover {
+            color: var(--primary-pink) !important;
+          }
+
+          .nav-link.active {
+            color: var(--primary-pink) !important;
+            font-weight: 600;
+          }
+
+          .dropdown-item:hover {
+            background-color: var(--primary-pink-light);
+            color: var(--primary-pink-dark);
+          }
+
+          .user-dropdown-toggle:hover {
+            color: var(--primary-pink) !important;
+          }
+
+          .protected-nav-icon {
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+          }
+
+          .protected-nav-icon:hover {
+            color: var(--primary-pink) !important;
+            transform: scale(1.1);
+          }
+
+          .incomplete-profile-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 8px;
+            height: 8px;
+            background: #ff6b6b;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+          }
+
+          @keyframes pulse {
+            0% {
+              transform: scale(0.95);
+              box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.7);
+            }
+            70% {
+              transform: scale(1);
+              box-shadow: 0 0 0 10px rgba(255, 107, 107, 0);
+            }
+            100% {
+              transform: scale(0.95);
+              box-shadow: 0 0 0 0 rgba(255, 107, 107, 0);
+            }
           }
         `}
       </style>
@@ -464,41 +576,50 @@ const Navbar = () => {
                     <Dropdown.Item
                       as="div"
                       onClick={(e) => {
-                        e.stopPropagation();
-                        handleAccountClick();
+                        e.stopPropagation()
+                        handleAccountClick()
                       }}
                     >
                       {isLoggedIn ? "My Account" : "Login"}
                     </Dropdown.Item>
 
-                    {isLoggedIn && (
-                      <Dropdown.Item onClick={handleLogoutPrompt}>Logout</Dropdown.Item>
-                    )}
+                    {isLoggedIn && <Dropdown.Item onClick={handleLogoutPrompt}>Logout</Dropdown.Item>}
                   </Dropdown.Menu>
                 </Dropdown>
               )}
             </div>
 
-            <IconLink
-              to="/wishlist"
-              iconType="navbar-heart"
-              badgeCount={wishlistCount}
-              className={`nav-icon ${wishlistCount > 0 ? 'filled' : ''}`}
-            />
-            <IconLink
-              to="/cart"
-              iconType="cart"
-              badgeCount={cartCount}
-              className="nav-icon"
-            />
+            <div
+              className="protected-nav-icon me-2 position-relative"
+              onClick={() => handleProtectedNavigation("/wishlist")}
+              role="button"
+              aria-label="Wishlist"
+            >
+              <IconLink
+                iconType="navbar-heart"
+                badgeCount={wishlistCount}
+                className={`nav-icon ${wishlistCount > 0 ? "filled" : ""}`}
+              />
+          
+            </div>
+
+            <div
+              className="protected-nav-icon position-relative"
+              onClick={() => handleProtectedNavigation("/cart")}
+              role="button"
+              aria-label="Shopping Cart"
+            >
+              <IconLink iconType="cart" badgeCount={cartCount} className="nav-icon" />
+        
+            </div>
           </Nav>
         </div>
       </BootstrapNavbar>
 
-      <div className={`premium-search-container ${showSearch ? 'show' : ''}`} ref={searchContainerRef}>
+      <div className={`premium-search-container ${showSearch ? "show" : ""}`} ref={searchContainerRef}>
         <div className="premium-search-inner">
           <form className="premium-search-form" onSubmit={handleSearchSubmit}>
-            <IconLink iconType="search" className="me-3" style={{ color: 'var(--accent)' }} />
+            <IconLink iconType="search" className="me-3" style={{ color: "var(--primary-pink)" }} />
             <input
               ref={searchInputRef}
               type="search"
@@ -517,45 +638,62 @@ const Navbar = () => {
                 <IconLink iconType="x" />
               </Button>
             )}
-            <Button
-              type="submit"
-              className="premium-search-btn"
-              aria-label="Search"
-            >
+            <Button type="submit" className="premium-search-btn" aria-label="Search">
               <IconLink iconType="search" />
             </Button>
           </form>
 
           {showSuggestions && searchQuery.trim() ? (
-            <SearchSuggestions
-              query={searchQuery}
-              onSelect={handleSuggestionSelect}
-              onClose={closeSuggestions}
-            />
+            <SearchSuggestions query={searchQuery} onSelect={handleSuggestionSelect} onClose={closeSuggestions} />
           ) : (
             <div className="trending-searches">
               <div className="trending-title">Popular Searches</div>
               <div className="trending-tags">
-                <div className="trending-tag" onClick={() => {
-                  setSearchQuery("summer dress");
-                  handleSearchSubmit({ preventDefault: () => { } });
-                }}>Summer Dress</div>
-                <div className="trending-tag" onClick={() => {
-                  setSearchQuery("cotton tops");
-                  handleSearchSubmit({ preventDefault: () => { } });
-                }}>Cotton Tops</div>
-                <div className="trending-tag" onClick={() => {
-                  setSearchQuery("denim");
-                  handleSearchSubmit({ preventDefault: () => { } });
-                }}>Denim</div>
-                <div className="trending-tag" onClick={() => {
-                  setSearchQuery("floral");
-                  handleSearchSubmit({ preventDefault: () => { } });
-                }}>Floral</div>
-                <div className="trending-tag" onClick={() => {
-                  setSearchQuery("casual");
-                  handleSearchSubmit({ preventDefault: () => { } });
-                }}>Casual</div>
+                <div
+                  className="trending-tag"
+                  onClick={() => {
+                    setSearchQuery("summer dress")
+                    handleSearchSubmit({ preventDefault: () => {} })
+                  }}
+                >
+                  Summer Dress
+                </div>
+                <div
+                  className="trending-tag"
+                  onClick={() => {
+                    setSearchQuery("cotton tops")
+                    handleSearchSubmit({ preventDefault: () => {} })
+                  }}
+                >
+                  Cotton Tops
+                </div>
+                <div
+                  className="trending-tag"
+                  onClick={() => {
+                    setSearchQuery("denim")
+                    handleSearchSubmit({ preventDefault: () => {} })
+                  }}
+                >
+                  Denim
+                </div>
+                <div
+                  className="trending-tag"
+                  onClick={() => {
+                    setSearchQuery("floral")
+                    handleSearchSubmit({ preventDefault: () => {} })
+                  }}
+                >
+                  Floral
+                </div>
+                <div
+                  className="trending-tag"
+                  onClick={() => {
+                    setSearchQuery("casual")
+                    handleSearchSubmit({ preventDefault: () => {} })
+                  }}
+                >
+                  Casual
+                </div>
               </div>
             </div>
           )}
@@ -565,7 +703,7 @@ const Navbar = () => {
         </button>
       </div>
 
-      <div className={`search-overlay ${showSearch ? 'show' : ''}`} onClick={toggleSearch}></div>
+      <div className={`search-overlay ${showSearch ? "show" : ""}`} onClick={toggleSearch}></div>
 
       <Offcanvas
         show={offcanvasShow}
@@ -604,7 +742,10 @@ const Navbar = () => {
                 aria-expanded={mobileDropdownOpen.more}
               >
                 More Categories
-                <IconLink iconType="chevron-down" className={`transition-transform ${mobileDropdownOpen.more ? "rotate-180" : ""}`} />
+                <IconLink
+                  iconType="chevron-down"
+                  className={`transition-transform ${mobileDropdownOpen.more ? "rotate-180" : ""}`}
+                />
               </div>
               {mobileDropdownOpen.more && (
                 <div className="dropdown-menu-mobile mt-2">
@@ -622,21 +763,25 @@ const Navbar = () => {
                 </div>
               )}
             </div>
-            <div
-              className="nav-link text-uppercase fw-bold"
-
-              onClick={handleAccountClick}
-              style={{ cursor: "pointer" }}
-            >
+            <div className="nav-link text-uppercase fw-bold" onClick={handleAccountClick} style={{ cursor: "pointer" }}>
               {isLoggedIn ? "My Account" : "Login"}
             </div>
             {isLoggedIn && (
               <div
                 className="nav-link text-uppercase fw-bold"
-                onClick={() => handleNavigation("/wishlist")}
+                onClick={() => handleProtectedNavigation("/wishlist")}
                 style={{ cursor: "pointer" }}
               >
-                Wishlist
+                Wishlist {!isProfileComplete() && <span style={{ color: "#ff6b6b" }}>*</span>}
+              </div>
+            )}
+            {isLoggedIn && (
+              <div
+                className="nav-link text-uppercase fw-bold"
+                onClick={() => handleProtectedNavigation("/cart")}
+                style={{ cursor: "pointer" }}
+              >
+                Cart {!isProfileComplete() && <span style={{ color: "#ff6b6b" }}>*</span>}
               </div>
             )}
             {isLoggedIn && (
@@ -660,7 +805,7 @@ const Navbar = () => {
         actionType={modalConfig.actionType}
       />
     </>
-  );
-};
+  )
+}
 
-export default Navbar;
+export default Navbar

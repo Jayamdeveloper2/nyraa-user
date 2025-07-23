@@ -1,198 +1,280 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  MailIcon, 
-  PhoneIcon, 
-  UserIcon, 
-  CalendarIcon
-} from '../../components/ui/Myaccounticons/MyAccountIcons';
-import { 
-  EditAddressButton, 
-  SaveAddressButton, 
-  CancelButton, 
-  SignOutButton
-} from '../../components/ui/Myaccountbuttons/MyAccountButtons';
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import ConfirmationModal from '../../components/ui/Myaccountconformodel/ConfirmationModal';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from "react"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { MailIcon, PhoneIcon, UserIcon, CalendarIcon } from "../../components/ui/Myaccounticons/MyAccountIcons"
+import {
+  EditAddressButton,
+  SaveAddressButton,
+  CancelButton,
+  SignOutButton,
+} from "../../components/ui/Myaccountbuttons/MyAccountButtons"
+import { toast, ToastContainer } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
+import ConfirmationModal from "../../components/ui/Myaccountconformodel/ConfirmationModal"
+import axios from "axios"
 
 const Profile = () => {
-  const [user, setUser] = useState(JSON.parse(localStorage.getItem('userData')) || {});
-  const [editing, setEditing] = useState({ name: false, phone: false });
-  const [tempData, setTempData] = useState({ 
-    name: user.name || '', 
-    phone: user.phone || ''
-  });
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem("userData")) || {})
+  const [editing, setEditing] = useState({ name: false, phone: false })
+  const [tempData, setTempData] = useState({
+    name: user.name || "",
+    phone: user.phone || "",
+  })
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [modalConfig, setModalConfig] = useState({
-    actionType: 'signout',
-    title: 'Confirm Sign Out'
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
+    actionType: "signout",
+    title: "Confirm Sign Out",
+  })
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [isProfileIncomplete, setIsProfileIncomplete] = useState(false)
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token")
         if (!token) {
-          setError('No authentication token found. Please log in.');
-          navigate('/login');
-          return;
+          setError("No authentication token found. Please log in.")
+          navigate("/nyraa/login")
+          return
         }
 
-        const response = await axios.get('http://localhost:5000/api/auth/profile', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await axios.get("http://localhost:5000/api/auth/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
 
-        console.log('Profile data fetched:', response.data); 
-        if (response.data.avatar) {
-          console.log('Avatar URL:', response.data.avatar); 
-        } else {
-          console.warn('No avatar URL found in profile data');
+        setUser(response.data)
+        setTempData({
+          name: response.data.name || "",
+          phone: response.data.phone || "",
+        })
+        localStorage.setItem("userData", JSON.stringify(response.data))
+
+        // Check if profile completion is required
+        const completeParam = searchParams.get("complete")
+        const profileIncomplete = !response.data.name || !response.data.phone || completeParam === "true"
+        setIsProfileIncomplete(profileIncomplete)
+
+        if (profileIncomplete) {
+          setEditing({ name: true, phone: true })
+          toast.info("Please complete your profile to continue", {
+            position: "top-center",
+            autoClose: 5000,
+          })
         }
 
-        setUser(response.data);
-        setTempData({ 
-          name: response.data.name || '', 
-          phone: response.data.phone || ''
-        });
-        localStorage.setItem('userData', JSON.stringify(response.data));
-        setIsLoading(false);
+        setIsLoading(false)
       } catch (error) {
-        console.error('Error fetching profile:', error);
-        setError(error.response?.data?.message || 'Error fetching profile');
-        setIsLoading(false);
+        console.error("Error fetching profile:", error)
+        setError(error.response?.data?.message || "Error fetching profile")
+        setIsLoading(false)
         if (error.response?.status === 401) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('userData');
-          localStorage.removeItem('isLoggedIn');
-          navigate('/login');
+          localStorage.removeItem("token")
+          localStorage.removeItem("userData")
+          localStorage.removeItem("isLoggedIn")
+          navigate("/nyraa/login")
         }
       }
-    };
-    fetchProfile();
-  }, [navigate]);
+    }
+    fetchProfile()
+  }, [navigate, searchParams])
 
   const handleEdit = (field) => {
-    setEditing({ ...editing, [field]: true });
-    setTempData({ ...tempData, [field]: user[field] || '' });
-  };
+    if (isProfileIncomplete) return
+    setEditing({ ...editing, [field]: true })
+    setTempData({ ...tempData, [field]: user[field] || "" })
+  }
 
   const handleCancel = (field) => {
-    setEditing({ ...editing, [field]: false });
-    setTempData({ ...tempData, [field]: user[field] || '' });
-  };
+    if (isProfileIncomplete) return
+    setEditing({ ...editing, [field]: false })
+    setTempData({ ...tempData, [field]: user[field] || "" })
+  }
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setTempData({ ...tempData, [name]: value });
-  };
+    const { name, value } = e.target
+    if (name === "phone") {
+      // Only allow numbers and limit to 15 digits
+      const phoneValue = value.replace(/\D/g, "").slice(0, 15)
+      setTempData({ ...tempData, [name]: phoneValue })
+    } else {
+      setTempData({ ...tempData, [name]: value })
+    }
+  }
 
   const handleSave = async (field) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token")
       if (!token) {
-        setError('No authentication token found. Please log in.');
-        navigate('/login');
-        return;
+        setError("No authentication token found. Please log in.")
+        navigate("/nyraa/login")
+        return
       }
 
-      const response = await axios.put('http://localhost:5000/api/auth/profile', {
-        [field]: tempData[field]
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUser(response.data);
-      localStorage.setItem('userData', JSON.stringify(response.data));
-      setEditing({ ...editing, [field]: false });
-      
-      toast.success('Profile updated successfully!', {
+      // Phone number validation
+      if (field === "phone") {
+        if (tempData.phone.length < 10) {
+          toast.error("Phone number must be at least 10 digits", {
+            position: "top-center",
+            autoClose: 3000,
+          })
+          return
+        }
+      }
+
+      const response = await axios.put(
+        "http://localhost:5000/api/auth/profile",
+        {
+          [field]: tempData[field],
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+
+      setUser(response.data)
+      localStorage.setItem("userData", JSON.stringify(response.data))
+      setEditing({ ...editing, [field]: false })
+
+      toast.success("Profile updated successfully!", {
         position: "top-right",
         autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      })
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Error updating profile', {
+      toast.error(error.response?.data?.message || "Error updating profile", {
         position: "top-right",
         autoClose: 3000,
-      });
+      })
     }
-  };
-
-  const handleSignOutPrompt = () => {
-    setModalConfig({ actionType: 'signout', title: 'Confirm Sign Out' });
-    setShowConfirmModal(true);
-  };
-
-const handleConfirmAction = () => {
-  if (modalConfig.actionType === 'signout') {
-    // Clear all auth data
-    localStorage.removeItem('token');
-    localStorage.removeItem('userData');
-    localStorage.removeItem('isLoggedIn');
-    sessionStorage.clear();
-    
-    // Force state update before navigation
-    setTimeout(() => {
-      navigate('/login', { replace: true });
-    }, 0);
   }
-  setShowConfirmModal(false);
-};
 
-  const handleCancelAction = () => {
-    setShowConfirmModal(false);
-  };
+  const handleCompleteProfile = async () => {
+    if (!tempData.name.trim() || !tempData.phone.trim()) {
+      toast.error("Please fill in both name and phone number", {
+        position: "top-center",
+        autoClose: 3000,
+      })
+      return
+    }
 
-  const handleAvatarUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('avatar', file);
+    if (tempData.phone.length < 10) {
+      toast.error("Phone number must be at least 10 digits", {
+        position: "top-center",
+        autoClose: 3000,
+      })
+      return
+    }
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post('http://localhost:5000/api/auth/upload-avatar', formData, {
+      const token = localStorage.getItem("token")
+      const response = await axios.put(
+        "http://localhost:5000/api/auth/profile",
+        {
+          name: tempData.name.trim(),
+          phone: tempData.phone.trim(),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      )
+
+      setUser(response.data)
+      localStorage.setItem("userData", JSON.stringify(response.data))
+      setEditing({ name: false, phone: false })
+      setIsProfileIncomplete(false)
+
+      toast.success("Profile completed successfully! You can now access all features.", {
+        position: "top-center",
+        autoClose: 3000,
+      })
+
+      // Check if there's a redirect destination
+      const redirectPath = sessionStorage.getItem("redirectAfterProfile")
+      if (redirectPath) {
+        sessionStorage.removeItem("redirectAfterProfile")
+        setTimeout(() => {
+          navigate(redirectPath)
+        }, 2000)
+      } else {
+        // Default redirect to home
+        setTimeout(() => {
+          navigate("/")
+        }, 2000)
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Error completing profile", {
+        position: "top-center",
+        autoClose: 3000,
+      })
+    }
+  }
+
+  const handleSignOutPrompt = () => {
+    setModalConfig({ actionType: "signout", title: "Confirm Sign Out" })
+    setShowConfirmModal(true)
+  }
+
+  const handleConfirmAction = () => {
+    if (modalConfig.actionType === "signout") {
+      // Clear all auth data
+      localStorage.removeItem("token")
+      localStorage.removeItem("userData")
+      localStorage.removeItem("isLoggedIn")
+      sessionStorage.clear()
+
+      // Force page reload and navigation
+      window.location.href = "/nyraa/login"
+    }
+    setShowConfirmModal(false)
+  }
+
+  const handleCancelAction = () => {
+    setShowConfirmModal(false)
+  }
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append("avatar", file)
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.post("http://localhost:5000/api/auth/upload-avatar", formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      setUser(response.data.user);
-      localStorage.setItem('userData', JSON.stringify(response.data.user));
-      toast.success('Avatar updated successfully!', {
+          "Content-Type": "multipart/form-data",
+        },
+      })
+      setUser(response.data.user)
+      localStorage.setItem("userData", JSON.stringify(response.data.user))
+      toast.success("Avatar updated successfully!", {
         position: "top-right",
         autoClose: 3000,
-      });
+      })
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Error uploading avatar', {
+      toast.error(error.response?.data?.message || "Error uploading avatar", {
         position: "top-right",
         autoClose: 3000,
-      });
+      })
     }
-  };
+  }
 
   const handleAvatarError = (e) => {
-    console.error('Failed to load avatar image:', user.avatar);
-    e.target.src = 'https://via.placeholder.com/40'; // Fallback image
-  };
+    e.target.src = "https://via.placeholder.com/60"
+  }
 
   if (isLoading) {
     return (
       <div className="profile-container">
-        <div className="text-center">
+        <div className="loading-spinner">
           <span className="spinner-border spinner-border-lg" role="status" aria-hidden="true"></span>
           <p>Loading profile...</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (error) {
@@ -202,162 +284,173 @@ const handleConfirmAction = () => {
           {error}
         </div>
       </div>
-    );
+    )
   }
 
   return (
     <div className="profile-container">
-      <div className="profile-card mb-4">
+      {isProfileIncomplete && (
+        <div className="profile-incomplete-alert">
+          <strong>Complete Your Profile:</strong> Please fill in your name and phone number to access all features like
+          cart and checkout.
+        </div>
+      )}
+
+      <div className="profile-card">
         <div className="profile-header">
-          <div className="d-flex align-items-center">
+          <div className="profile-avatar-section">
             <div className="profile-avatar">
               {user.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  alt="User Avatar" 
-                  className="avatar-img" 
+                <img
+                  src={user.avatar || "/placeholder.svg"}
+                  alt="User Avatar"
+                  className="avatar-img"
                   onError={handleAvatarError}
                 />
               ) : (
                 <UserIcon />
               )}
             </div>
-            <h5 className="mb-0 fw-semibold">{user.name || 'User'}</h5>
+            <div className="profile-info">
+              <h4 className="profile-name">{user.name || "User"}</h4>
+              <p className="profile-email">{user.email}</p>
+            </div>
           </div>
-          <div className="avatar-upload">
-            <input
-              type="file"
-              accept="image/*"
-              id="avatarUpload"
-              onChange={handleAvatarUpload}
-              style={{ display: 'none' }}
-            />
-            <label htmlFor="avatarUpload" className="edit-avatar-btn">
-              Change Avatar
-            </label>
-          </div>
+          {!isProfileIncomplete && (
+            <div className="avatar-upload">
+              <input
+                type="file"
+                accept="image/*"
+                id="avatarUpload"
+                onChange={handleAvatarUpload}
+                style={{ display: "none" }}
+              />
+              <label htmlFor="avatarUpload" className="edit-avatar-btn">
+                Change Photo
+              </label>
+            </div>
+          )}
         </div>
+
         <div className="profile-body">
-          <div className="row">
-            <div className="col-12">
-              <div className="profile-info-item mb-4">
-                <div className="d-flex align-items-center mb-2">
-                  <MailIcon className="text-gold me-2" />
-                  <h6 className="mb-0 fw-semibold">Email Address</h6>
+          <div className="profile-section">
+            <div className="profile-field">
+              <div className="field-header">
+                <div className="field-label">
+                  <MailIcon className="field-icon" />
+                  <span>Email Address</span>
                 </div>
-                <p className="text-muted mb-0 ps-4">{user.email || 'N/A'}</p>
-                <p className="text-muted mb-0 ps-4 small">(Email cannot be changed)</p>
               </div>
+              <div className="field-value">
+                <span className="field-text">{user.email || "N/A"}</span>
+                <small className="field-note">Email cannot be changed</small>
+              </div>
+            </div>
 
-              <div className="profile-info-item mb-4">
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <div className="d-flex align-items-center">
-                    <UserIcon className="text-gold me-2" />
-                    <h6 className="mb-0 fw-semibold">Full Name</h6>
-                  </div>
-                  {!editing.name ? (
-                    <EditAddressButton onClick={() => handleEdit('name')} />
-                  ) : (
-                    <div className="d-flex gap-2">
-                      <SaveAddressButton onClick={() => handleSave('name')} />
-                      <CancelButton onClick={() => handleCancel('name')} />
-                    </div>
-                  )}
+            <div className="profile-field">
+              <div className="field-header">
+                <div className="field-label">
+                  <UserIcon className="field-icon" />
+                  <span>
+                    Full Name
+                    {isProfileIncomplete && <span className="required-mark">*</span>}
+                  </span>
                 </div>
-                {!editing.name ? (
-                  <p className="text-muted mb-0 ps-4">{user.name || 'N/A'}</p>
-                ) : (
-                  <div className="ps-4">
-                    <input
-                      type="text"
-                      className="form-control rounded-3"
-                      name="name"
-                      value={tempData.name}
-                      onChange={handleChange}
-                    />
+                {!editing.name && !isProfileIncomplete ? (
+                  <EditAddressButton onClick={() => handleEdit("name")} />
+                ) : !isProfileIncomplete ? (
+                  <div className="field-actions">
+                    <SaveAddressButton onClick={() => handleSave("name")} />
+                    <CancelButton onClick={() => handleCancel("name")} />
                   </div>
+                ) : null}
+              </div>
+              <div className="field-value">
+                {!editing.name && !isProfileIncomplete ? (
+                  <span className="field-text">{user.name || "N/A"}</span>
+                ) : (
+                  <input
+                    type="text"
+                    className="field-input"
+                    name="name"
+                    value={tempData.name}
+                    onChange={handleChange}
+                    placeholder="Enter your full name"
+                    required
+                  />
                 )}
               </div>
+            </div>
 
-              <div className="profile-info-item mb-4">
-                <div className="d-flex align-items-center justify-content-between mb-2">
-                  <div className="d-flex align-items-center">
-                    <PhoneIcon className="text-gold me-2" />
-                    <h6 className="mb-0 fw-semibold">Phone Number</h6>
-                  </div>
-                  {!editing.phone ? (
-                    <EditAddressButton onClick={() => handleEdit('phone')} />
-                  ) : (
-                    <div className="d-flex gap-2">
-                      <SaveAddressButton onClick={() => handleSave('phone')} />
-                      <CancelButton onClick={() => handleCancel('phone')} />
-                    </div>
-                  )}
+            <div className="profile-field">
+              <div className="field-header">
+                <div className="field-label">
+                  <PhoneIcon className="field-icon" />
+                  <span>
+                    Phone Number
+                    {isProfileIncomplete && <span className="required-mark">*</span>}
+                  </span>
                 </div>
-                {!editing.phone ? (
-                  <p className="text-muted mb-0 ps-4">{user.phone || 'N/A'}</p>
-                ) : (
-                  <div className="ps-4">
-                    <input
-                      type="tel"
-                      className="form-control rounded-3"
-                      name="phone"
-                      value={tempData.phone}
-                      onChange={handleChange} 
-                    />
+                {!editing.phone && !isProfileIncomplete ? (
+                  <EditAddressButton onClick={() => handleEdit("phone")} />
+                ) : !isProfileIncomplete ? (
+                  <div className="field-actions">
+                    <SaveAddressButton onClick={() => handleSave("phone")} />
+                    <CancelButton onClick={() => handleCancel("phone")} />
                   </div>
+                ) : null}
+              </div>
+              <div className="field-value">
+                {!editing.phone && !isProfileIncomplete ? (
+                  <span className="field-text">{user.phone || "N/A"}</span>
+                ) : (
+                  <input
+                    type="tel"
+                    className="field-input"
+                    name="phone"
+                    value={tempData.phone}
+                    onChange={handleChange}
+                    placeholder="Enter phone number"
+                    required
+                  />
                 )}
               </div>
+            </div>
 
-              <div className="profile-info-item mb-4">
-                <div className="d-flex align-items-center mb-2"> 
-                  <CalendarIcon className="text-gold me-2" />
-                  <h6 className="mb-0 fw-semibold">Member Since</h6>
+            <div className="profile-field">
+              <div className="field-header">
+                <div className="field-label">
+                  <CalendarIcon className="field-icon" />
+                  <span>Member Since</span>
                 </div>
-                <p className="text-muted mb-0 ps-4">{user.joinDate || 'N/A'}</p> 
               </div>
-
-              {user.type === 'admin' && (
-                <div className="profile-info-item mb-4">
-                  <div className="d-flex align-items-center mb-2">
-                    <h6 className="mb-0 fw-semibold">Department</h6>
-                  </div>
-                  <p className="text-muted mb-0 ps-4">{user.department || 'N/A'}</p>
-                </div>
-              )}
+              <div className="field-value">
+                <span className="field-text">{user.joinDate || "N/A"}</span>
+              </div>
             </div>
           </div>
+
+          {isProfileIncomplete && (
+            <div className="complete-profile-section">
+              <button
+                className="complete-profile-btn"
+                onClick={handleCompleteProfile}
+                disabled={!tempData.name.trim() || !tempData.phone.trim()}
+              >
+                Complete Profile
+              </button>
+              <p className="complete-profile-note">
+                You must complete your profile to access cart and checkout features.
+              </p>
+            </div>
+          )}
+
+          {!isProfileIncomplete && (
+            <div className="profile-actions">
+              <SignOutButton onClick={handleSignOutPrompt} />
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="settings-card mb-4">
-        <div className="settings-body">
-          <div className="d-flex align-items-center mb-3">
-            <h5 className="mb-0 fw-semibold">Account Settings</h5>
-          </div>
-          <div className="d-flex justify-content-between align-items-center py-2 border-bottom">
-            <div>
-              <p className="mb-0 fw-medium">Email Notifications</p>
-              <p className="text-muted small mb-0">Receive order updates and promotions</p>
-            </div>
-            <div className="form-check form-switch">
-              <input className="form-check-input" type="checkbox" id="emailNotifications" defaultChecked />
-            </div>
-          </div>
-          <div className="d-flex justify-content-between align-items-center py-2">
-            <div>
-              <p className="mb-0 fw-medium">Newsletter Subscription</p>
-              <p className="text-muted small mb-0">Stay updated with our latest products</p>
-            </div>
-            <div className="form-check form-switch">
-              <input className="form-check-input" type="checkbox" id="newsletter" defaultChecked />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="text-end">
-        <SignOutButton onClick={handleSignOutPrompt} />
       </div>
 
       <ConfirmationModal
@@ -369,7 +462,7 @@ const handleConfirmAction = () => {
         confirmButtonText="Sign Out"
       />
 
-      <ToastContainer 
+      <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -383,43 +476,65 @@ const handleConfirmAction = () => {
 
       <style jsx>{`
         .profile-container {
-          font-family: 'Open Sans', sans-serif;
-          padding: 0;
-          max-width: 1200px;
+          max-width: 800px;
           margin: 0 auto;
+          padding: 20px;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
-        .profile-card, .settings-card {
+        .loading-spinner {
+          text-align: center;
+          padding: 60px 20px;
+        }
+
+        .loading-spinner p {
+          margin-top: 15px;
+          color: #6b7280;
+        }
+
+        .profile-incomplete-alert {
+          background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+          border: 1px solid #f59e0b;
           border-radius: 12px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          transition: transform 0.3s ease;
+          padding: 16px 20px;
+          margin-bottom: 24px;
+          color: #92400e;
+          font-size: 14px;
         }
 
-        .profile-card:hover, .settings-card:hover {
-          transform: translateY(-5px);
+        .profile-card {
+          background: #ffffff;
+          border-radius: 16px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+          overflow: hidden;
+          border: 1px solid #f1f5f9;
         }
 
         .profile-header {
-          padding: 1.5rem;
-          background: linear-gradient(135deg, #D47A9D 0%, #BE6992 100%);
-          border-radius: 12px 12px 0 0;
+          background: linear-gradient(135deg, #D0779B 0%, #B8657F 100%);
+          padding: 32px 24px;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          color: white;
+        }
+
+        .profile-avatar-section {
+          display: flex;
+          align-items: center;
+          gap: 16px;
         }
 
         .profile-avatar {
-          width: 60px;
-          height: 60px;
-          background: #ffffff;
-          color: #BE6992;
-          box-shadow: 0 2px 8px rgba(197, 164, 126, 0.3);
+          width: 64px;
+          height: 64px;
           border-radius: 50%;
+          background: rgba(255, 255, 255, 0.2);
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-right: 1rem;
           overflow: hidden;
+          border: 3px solid rgba(255, 255, 255, 0.3);
         }
 
         .avatar-img {
@@ -428,66 +543,197 @@ const handleConfirmAction = () => {
           object-fit: cover;
         }
 
+        .profile-info h4 {
+          margin: 0 0 4px 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .profile-email {
+          margin: 0;
+          opacity: 0.9;
+          font-size: 14px;
+        }
+
         .edit-avatar-btn {
-          cursor: pointer;
-          color: #ffffff;
-          text-decoration: underline;
-          font-size: 0.9rem;
-        }
-
-        .profile-body, .settings-body {
-          padding: 1.5rem;
-        }
-
-        .text-gold {
-          color: #BE6992 !important;
-        }
-
-        .form-control {
-          font-size: 0.95rem;
+          background: rgba(255, 255, 255, 0.2);
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          color: white;
+          padding: 8px 16px;
           border-radius: 8px;
-          border: 1px solid #ced4da;
-          transition: border-color 0.3s ease, box-shadow 0.3s ease;
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
 
-        .form-control:focus {
-          border-color: #BE6992;
-          box-shadow: 0 0 8px rgba(197, 164, 126, 0.3);
+        .edit-avatar-btn:hover {
+          background: rgba(255, 255, 255, 0.3);
+        }
+
+        .profile-body {
+          padding: 32px 24px;
+        }
+
+        .profile-section {
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .profile-field {
+          border-bottom: 1px solid #f1f5f9;
+          padding-bottom: 20px;
+        }
+
+        .profile-field:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .field-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+
+        .field-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 500;
+          color: #374151;
+          font-size: 14px;
+        }
+
+        .field-icon {
+          color: #D0779B;
+          width: 16px;
+          height: 16px;
+        }
+
+        .required-mark {
+          color: #ef4444;
+          margin-left: 4px;
+        }
+
+        .field-actions {
+          display: flex;
+          gap: 8px;
+        }
+
+        .field-value {
+          margin-left: 24px;
+        }
+
+        .field-text {
+          color: #6b7280;
+          font-size: 14px;
+        }
+
+        .field-note {
+          display: block;
+          color: #9ca3af;
+          font-size: 12px;
+          margin-top: 4px;
+        }
+
+        .field-input {
+          width: 100%;
+          max-width: 300px;
+          padding: 10px 12px;
+          border: 1px solid #d1d5db;
+          border-radius: 8px;
+          font-size: 14px;
+          transition: all 0.2s ease;
+        }
+
+        .field-input:focus {
           outline: none;
+          border-color: #D0779B;
+          box-shadow: 0 0 0 3px rgba(208, 119, 155, 0.1);
         }
 
-        .form-check-input:checked {
-          background-color: #BE6992;
-          border-color: #BE6992;
+        .complete-profile-section {
+          text-align: center;
+          margin-top: 32px;
+          padding-top: 24px;
+          border-top: 1px solid #f1f5f9;
         }
 
-        .form-check-input:focus {
-          box-shadow: 0 0 8px rgba(197, 164, 126, 0.3);
+        .complete-profile-btn {
+          background: linear-gradient(135deg, #D0779B 0%, #B8657F 100%);
+          color: white;
+          border: none;
+          padding: 14px 32px;
+          border-radius: 10px;
+          font-size: 15px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
 
-        .toast-content {
-          padding: 0.5rem;
+        .complete-profile-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 25px rgba(208, 119, 155, 0.3);
+        }
+
+        .complete-profile-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .complete-profile-note {
+          margin-top: 12px;
+          color: #6b7280;
+          font-size: 13px;
+        }
+
+        .profile-actions {
+          margin-top: 32px;
+          padding-top: 24px;
+          border-top: 1px solid #f1f5f9;
+          text-align: right;
         }
 
         @media (max-width: 768px) {
-          .profile-body, .settings-body {
-            padding: 1.25rem;
-          }
-        }
-
-        @media (max-width: 576px) {
-          .profile-avatar {
-            width: 48px;
-            height: 48px;
+          .profile-container {
+            padding: 16px;
           }
 
-          .profile-body, .settings-body {
-            padding: 1rem;
+          .profile-header {
+            padding: 24px 20px;
+            flex-direction: column;
+            gap: 16px;
+            text-align: center;
+          }
+
+          .profile-avatar-section {
+            flex-direction: column;
+            gap: 12px;
+          }
+
+          .profile-body {
+            padding: 24px 20px;
+          }
+
+          .field-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+
+          .field-value {
+            margin-left: 0;
+          }
+
+          .field-input {
+            max-width: 100%;
           }
         }
       `}</style>
     </div>
-  );
-};
+  )
+}
 
-export default Profile;
+export default Profile
