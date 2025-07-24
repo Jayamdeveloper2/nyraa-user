@@ -8,11 +8,14 @@ import "../styles/Login.css"
 const Login = () => {
   const [email, setEmail] = useState("")
   const [otp, setOtp] = useState("")
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showOtpOption, setShowOtpOption] = useState(false)
   const [otpSent, setOtpSent] = useState(false)
+  const [showProfileForm, setShowProfileForm] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const navigate = useNavigate()
 
@@ -94,8 +97,8 @@ const Login = () => {
         localStorage.setItem("isLoggedIn", "true")
 
         if (!response.data.user.name || !response.data.user.phone) {
-          setSuccess("Login successful! Please complete your profile...")
-          setTimeout(() => navigate("/account/profile?complete=true"), 1500)
+          setShowProfileForm(true)
+          setSuccess("OTP verified! Please complete your profile.")
         } else {
           setSuccess("Login successful! Redirecting...")
           setTimeout(() => navigate("/"), 1500)
@@ -104,6 +107,47 @@ const Login = () => {
     } catch (error) {
       console.error("Verify OTP error:", error)
       setError(error.response?.data?.message || "Failed to verify OTP. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCompleteProfile = async (e) => {
+    e.preventDefault()
+    clearMessages()
+    setIsLoading(true)
+
+    if (!name.trim() || !phone.trim()) {
+      setError("Please fill in both name and phone number")
+      setIsLoading(false)
+      return
+    }
+
+    if (phone.length < 10) {
+      setError("Phone number must be at least 10 digits")
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const token = localStorage.getItem("token")
+      const response = await axios.put(
+        "http://localhost:5000/api/auth/profile",
+        {
+          name: name.trim(),
+          phone: phone.replace(/\D/g, "").slice(0, 15),
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      )
+
+      localStorage.setItem("userData", JSON.stringify(response.data))
+      setSuccess("Profile completed successfully! Redirecting...")
+      setTimeout(() => navigate("/"), 1500)
+    } catch (error) {
+      console.error("Complete profile error:", error)
+      setError(error.response?.data?.message || "Failed to complete profile. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -124,12 +168,7 @@ const Login = () => {
         localStorage.setItem("isLoggedIn", "true")
 
         setSuccess("Google login successful! Redirecting...")
-
-        if (response.data.isNewUser || !response.data.user.name || !response.data.user.phone) {
-          setTimeout(() => navigate("/account/profile?complete=true"), 1500)
-        } else {
-          setTimeout(() => navigate("/"), 1500)
-        }
+        setTimeout(() => navigate(response.data.isNewUser || !response.data.user.name || !response.data.user.phone ? "/account/profile?complete=true" : "/"), 1500)
       }
     } catch (error) {
       console.error("Google login error:", error)
@@ -172,6 +211,9 @@ const Login = () => {
     setOtpSent(false)
     setOtp("")
     setEmail("")
+    setShowProfileForm(false)
+    setName("")
+    setPhone("")
   }
 
   useEffect(() => {
@@ -210,9 +252,9 @@ const Login = () => {
             {!showOtpOption && (
               <div className="google-login-section">
                 <GoogleLogin
-                theme="filled_blue"
-                shape="pill"
-                size="large"
+                  theme="filled_blue"
+                  shape="pill"
+                  size="large"
                   onSuccess={handleGoogleSuccess}
                   onError={handleGoogleError}
                   render={(renderProps) => (
@@ -236,12 +278,12 @@ const Login = () => {
                 </div>
 
                 <button className="switch-method-btn" onClick={toggleLoginMethod} type="button">
-                  Continue with Email
+                  Show Another Option
                 </button>
               </div>
             )}
 
-            {showOtpOption && (
+            {showOtpOption && !showProfileForm && (
               <div className="otp-login-section">
                 <button className="back-to-google-btn" onClick={toggleLoginMethod} type="button">
                   ← Back to Google Sign-in
@@ -349,6 +391,71 @@ const Login = () => {
                     </button>
                   </form>
                 )}
+              </div>
+            )}
+
+            {showProfileForm && (
+              <div className="profile-complete-section mt-3">
+                <h3 className="profile-complete-title">Complete Your Profile</h3>
+                <p className="profile-complete-subtitle">
+                  Please provide your name and phone number to continue
+                </p>
+                <form onSubmit={handleCompleteProfile} className="profile-form">
+                  <div className="form-group">
+                    <label htmlFor="name" className="form-label">
+                      Full Name
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <User size={18} />
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        id="name"
+                        placeholder="Enter your full name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="phone" className="form-label">
+                      Phone Number
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                      </span>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        id="phone"
+                        placeholder="Enter your phone number"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 15))}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-block mt-3"
+                    disabled={isLoading || !name.trim() || !phone.trim()}
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2"></span>
+                        Saving...
+                      </>
+                    ) : (
+                      "Complete Profile"
+                    )}
+                  </button>
+                </form>
               </div>
             )}
           </div>
