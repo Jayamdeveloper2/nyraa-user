@@ -6,7 +6,6 @@ import FeaturedCategories from "../components/FeaturedCategories/FeaturedCategor
 import LatestProducts from "../components/LatestProducts/LatestProducts";
 import TrendingStyles from "../components/TrendingStyles/TrendingStyles";
 import FeaturedCollections from "../components/FeaturedCollections/FeaturedCollections";
-import CustomerReviews from "../components/CustomerReviews/CustomerReviews";
 import ActivewearSpotlight from "../components/ActivewearSpotlight/ActivewearSpotlight";
 import Newsletter from "../components/Newsletter/Newsletter";
 import ClothingSpotlight from "../components/ClothingSpotlight/ClothingSpotlight";
@@ -25,7 +24,6 @@ const HomePage = () => {
       <LatestProducts onProductClick={handleProductClick} />
       <TrendingStyles onProductClick={handleProductClick} />
       <FeaturedCollections onProductClick={handleProductClick} />
-      {/* <CustomerReviews /> */}
       <ClothingSpotlight />
       <ActivewearSpotlight onProductClick={handleProductClick} />
       <Newsletter />
