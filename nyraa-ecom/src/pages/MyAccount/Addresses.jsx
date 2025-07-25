@@ -1,29 +1,179 @@
-// src/components/Addresses.jsx
-import React, { useState, useEffect } from "react";
-import { 
-  AddAddressButton, 
-  SetDefaultButton, 
-  DeleteAddressButton, 
-  CancelButton, 
+"use client"
+
+import { useState, useEffect } from "react"
+import {
+  AddAddressButton,
+  SetDefaultButton,
+  DeleteAddressButton,
+  CancelButton,
   EditAddressButton,
-  SaveAddressButton, 
-  ResetButton 
-} from "../../components/ui/Myaccountbuttons/MyAccountButtons";
-import { 
-  HomeIcon,
-  WorkIcon,
-  MapPinIcon
-} from "../../components/ui/Myaccounticons/MyAccountIcons";
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import ConfirmationModal from "../../components/ui/Myaccountconformodel/ConfirmationModal";
-import { getAddresses, saveAddress, deleteAddress, setDefaultAddress } from '../../data/profileData';
+  SaveAddressButton,
+  ResetButton,
+} from "../../components/ui/Myaccountbuttons/MyAccountButtons"
+import { HomeIcon, WorkIcon, MapPinIcon } from "../../components/ui/Myaccounticons/MyAccountIcons"
+import { toast, ToastContainer } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
+import ConfirmationModal from "../../components/ui/Myaccountconformodel/ConfirmationModal"
+
+// Enhanced address management with API integration
+const API_BASE_URL = "http://localhost:5000/api"
+
+// Get auth token from localStorage
+const getAuthToken = () => {
+  return localStorage.getItem("token") || sessionStorage.getItem("token")
+}
+
+// API service for addresses
+const addressService = {
+  async getAddresses() {
+    const token = getAuthToken()
+    if (!token) {
+      throw new Error("Authentication required")
+    }
+
+    const response = await fetch(`${API_BASE_URL}/user/addresses`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch addresses")
+    }
+
+    const data = await response.json()
+    return data.success ? data.data : []
+  },
+
+  async saveAddress(addressData, isEditing = false, addressId = null) {
+    const token = getAuthToken()
+    if (!token) {
+      throw new Error("Authentication required")
+    }
+
+    const url = isEditing ? `${API_BASE_URL}/user/addresses/${addressId}` : `${API_BASE_URL}/user/addresses`
+
+    const method = isEditing ? "PUT" : "POST"
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(addressData),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to ${isEditing ? "update" : "create"} address`)
+    }
+
+    const data = await response.json()
+    return data.success ? data.data : null
+  },
+
+  async deleteAddress(addressId) {
+    const token = getAuthToken()
+    if (!token) {
+      throw new Error("Authentication required")
+    }
+
+    const response = await fetch(`${API_BASE_URL}/user/addresses/${addressId}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to delete address")
+    }
+
+    return true
+  },
+
+  async setDefaultAddress(addressId) {
+    const token = getAuthToken()
+    if (!token) {
+      throw new Error("Authentication required")
+    }
+
+    const response = await fetch(`${API_BASE_URL}/user/addresses/${addressId}/default`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to set default address")
+    }
+
+    const data = await response.json()
+    return data.success ? data.data : null
+  },
+}
+
+// Fallback local storage functions for offline mode
+const localStorageService = {
+  getAddresses() {
+    const addresses = localStorage.getItem("userAddresses")
+    return addresses ? JSON.parse(addresses) : []
+  },
+
+  saveAddress(addressData, isEditing = false, addressId = null) {
+    let addresses = this.getAddresses()
+
+    if (isEditing && addressId) {
+      addresses = addresses.map((addr) => (addr.id === addressId ? { ...addressData, id: addressId } : addr))
+    } else {
+      const newAddress = {
+        ...addressData,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+      }
+      addresses.push(newAddress)
+    }
+
+    // Handle default address logic
+    if (addressData.isDefault) {
+      addresses = addresses.map((addr) => ({
+        ...addr,
+        isDefault: addr.id === (addressId || addresses[addresses.length - 1].id),
+      }))
+    }
+
+    localStorage.setItem("userAddresses", JSON.stringify(addresses))
+    return addresses
+  },
+
+  deleteAddress(addressId) {
+    let addresses = this.getAddresses()
+    addresses = addresses.filter((addr) => addr.id !== addressId)
+    localStorage.setItem("userAddresses", JSON.stringify(addresses))
+    return addresses
+  },
+
+  setDefaultAddress(addressId) {
+    let addresses = this.getAddresses()
+    addresses = addresses.map((addr) => ({
+      ...addr,
+      isDefault: addr.id === addressId,
+    }))
+    localStorage.setItem("userAddresses", JSON.stringify(addresses))
+    return addresses
+  },
+}
 
 const Addresses = () => {
-  const [addresses, setAddresses] = useState(getAddresses());
-  const [showForm, setShowForm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingAddressId, setEditingAddressId] = useState(null);
+  const [addresses, setAddresses] = useState([])
+  const [showForm, setShowForm] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [formData, setFormData] = useState({
     name: "",
     street: "",
@@ -34,44 +184,105 @@ const Addresses = () => {
     phone: "",
     isDefault: false,
     type: "home",
-  });
-  
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  })
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [modalConfig, setModalConfig] = useState({
     itemToDelete: null,
-    actionType: 'deleteAddress',
-    title: 'Confirm Delete Address'
-  });
+    actionType: "deleteAddress",
+    title: "Confirm Delete Address",
+  })
 
+  // Load addresses on component mount
   useEffect(() => {
-    setAddresses(getAddresses());
-  }, []);
+    loadAddresses()
+  }, [])
+
+  const loadAddresses = async () => {
+    try {
+      setLoading(true)
+      const token = getAuthToken()
+
+      if (token) {
+        // Try to load from API
+        try {
+          const apiAddresses = await addressService.getAddresses()
+          setAddresses(apiAddresses)
+        } catch (apiError) {
+          console.warn("API failed, using local storage:", apiError)
+          // Fallback to local storage
+          const localAddresses = localStorageService.getAddresses()
+          setAddresses(localAddresses)
+        }
+      } else {
+        // No token, use local storage
+        const localAddresses = localStorageService.getAddresses()
+        setAddresses(localAddresses)
+      }
+    } catch (error) {
+      console.error("Error loading addresses:", error)
+      toast.error("Failed to load addresses", {
+        position: "top-right",
+        autoClose: 3000,
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value, type, checked } = e.target
     setFormData({
       ...formData,
       [name]: type === "checkbox" ? checked : value,
-    });
-  };
+    })
+  }
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+
+    // Validation
     if (!formData.name || !formData.street || !formData.city || !formData.state || !formData.zip || !formData.phone) {
       toast.error("Please fill all required fields.", {
         position: "top-right",
         autoClose: 3000,
-      });
-      return;
+      })
+      return
     }
-    const updatedAddresses = saveAddress(formData, isEditing, editingAddressId);
-    setAddresses(updatedAddresses);
-    resetForm();
-    toast.success(isEditing ? 'Address updated successfully!' : 'Address added successfully!', {
-      position: "top-right",
-      autoClose: 3000,
-    });
-  };
+
+    try {
+      const token = getAuthToken()
+
+      if (token) {
+        // Try API first
+        try {
+          await addressService.saveAddress(formData, isEditing, editingAddressId)
+          await loadAddresses() // Reload from API
+        } catch (apiError) {
+          console.warn("API failed, using local storage:", apiError)
+          // Fallback to local storage
+          const updatedAddresses = localStorageService.saveAddress(formData, isEditing, editingAddressId)
+          setAddresses(updatedAddresses)
+        }
+      } else {
+        // No token, use local storage
+        const updatedAddresses = localStorageService.saveAddress(formData, isEditing, editingAddressId)
+        setAddresses(updatedAddresses)
+      }
+
+      resetForm()
+      toast.success(isEditing ? "Address updated successfully!" : "Address added successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      })
+    } catch (error) {
+      console.error("Error saving address:", error)
+      toast.error("Failed to save address", {
+        position: "top-right",
+        autoClose: 3000,
+      })
+    }
+  }
 
   const resetForm = () => {
     setFormData({
@@ -84,11 +295,11 @@ const Addresses = () => {
       phone: "",
       isDefault: false,
       type: "home",
-    });
-    setShowForm(false);
-    setIsEditing(false);
-    setEditingAddressId(null);
-  };
+    })
+    setShowForm(false)
+    setIsEditing(false)
+    setEditingAddressId(null)
+  }
 
   const resetFields = () => {
     setFormData({
@@ -101,49 +312,118 @@ const Addresses = () => {
       phone: "",
       isDefault: false,
       type: "home",
-    });
-  };
+    })
+  }
 
   const handleDeletePrompt = (id) => {
     setModalConfig({
       itemToDelete: id,
-      actionType: 'deleteAddress',
-      title: 'Confirm Delete Address'
-    });
-    setShowConfirmModal(true);
-  };
+      actionType: "deleteAddress",
+      title: "Confirm Delete Address",
+    })
+    setShowConfirmModal(true)
+  }
 
-  const handleConfirmAction = () => {
-    if (modalConfig.actionType === 'deleteAddress' && modalConfig.itemToDelete) {
-      const updatedAddresses = deleteAddress(modalConfig.itemToDelete);
-      setAddresses(updatedAddresses);
-      toast.success('Address deleted successfully!', {
-        position: "top-right",
-        autoClose: 3000,
-      });
+  const handleConfirmAction = async () => {
+    if (modalConfig.actionType === "deleteAddress" && modalConfig.itemToDelete) {
+      try {
+        const token = getAuthToken()
+
+        if (token) {
+          // Try API first
+          try {
+            await addressService.deleteAddress(modalConfig.itemToDelete)
+            await loadAddresses()
+          } catch (apiError) {
+            console.warn("API failed, using local storage:", apiError)
+            // Fallback to local storage
+            const updatedAddresses = localStorageService.deleteAddress(modalConfig.itemToDelete)
+            setAddresses(updatedAddresses)
+          }
+        } else {
+          // No token, use local storage
+          const updatedAddresses = localStorageService.deleteAddress(modalConfig.itemToDelete)
+          setAddresses(updatedAddresses)
+        }
+
+        toast.success("Address deleted successfully!", {
+          position: "top-right",
+          autoClose: 3000,
+        })
+      } catch (error) {
+        console.error("Error deleting address:", error)
+        toast.error("Failed to delete address", {
+          position: "top-right",
+          autoClose: 3000,
+        })
+      }
     }
-    setShowConfirmModal(false);
-  };
+    setShowConfirmModal(false)
+  }
 
   const handleCancelAction = () => {
-    setShowConfirmModal(false);
-  };
+    setShowConfirmModal(false)
+  }
 
   const editAddress = (id) => {
-    const addressToEdit = addresses.find((addr) => addr.id === id);
+    const addressToEdit = addresses.find((addr) => addr.id === id)
     if (addressToEdit) {
-      setFormData({ ...addressToEdit });
-      setIsEditing(true);
-      setEditingAddressId(id);
-      setShowForm(true);
+      setFormData({ ...addressToEdit })
+      setIsEditing(true)
+      setEditingAddressId(id)
+      setShowForm(true)
     }
-  };
+  }
+
+  const handleSetDefault = async (addressId) => {
+    try {
+      const token = getAuthToken()
+
+      if (token) {
+        // Try API first
+        try {
+          await addressService.setDefaultAddress(addressId)
+          await loadAddresses()
+        } catch (apiError) {
+          console.warn("API failed, using local storage:", apiError)
+          // Fallback to local storage
+          const updatedAddresses = localStorageService.setDefaultAddress(addressId)
+          setAddresses(updatedAddresses)
+        }
+      } else {
+        // No token, use local storage
+        const updatedAddresses = localStorageService.setDefaultAddress(addressId)
+        setAddresses(updatedAddresses)
+      }
+
+      toast.success("Default address updated successfully!", {
+        position: "top-right",
+        autoClose: 3000,
+      })
+    } catch (error) {
+      console.error("Error setting default address:", error)
+      toast.error("Failed to set default address", {
+        position: "top-right",
+        autoClose: 3000,
+      })
+    }
+  }
 
   const getAddressTypeIcon = (type) => {
-    if (type === "home") return <HomeIcon />;
-    if (type === "work") return <WorkIcon />;
-    return <MapPinIcon />;
-  };
+    if (type === "home") return <HomeIcon />
+    if (type === "work") return <WorkIcon />
+    return <MapPinIcon />
+  }
+
+  if (loading) {
+    return (
+      <div className="text-center py-5">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="addresses-container">
@@ -152,19 +432,14 @@ const Addresses = () => {
         {showForm ? (
           <CancelButton onClick={resetForm} />
         ) : (
-          <AddAddressButton
-            onClick={() => setShowForm(true)}
-            className="btn-primary"
-          />
+          <AddAddressButton onClick={() => setShowForm(true)} className="btn-primary" />
         )}
       </div>
 
       {showForm && (
         <div className="card mb-4 border-0 shadow-lg rounded-4">
           <div className="card-header bg-gradient">
-            <h5 className="card-title mb-0 fw-semibold">
-              {isEditing ? "Edit Address" : "Add New Address"}
-            </h5>
+            <h5 className="card-title mb-0 fw-semibold">{isEditing ? "Edit Address" : "Add New Address"}</h5>
           </div>
           <div className="card-body p-3">
             <form onSubmit={handleSubmit}>
@@ -237,12 +512,7 @@ const Addresses = () => {
                 </div>
                 <div className="col-md-6">
                   <label className="form-label fw-medium">Country</label>
-                  <select
-                    className="form-select"
-                    name="country"
-                    value={formData.country}
-                    onChange={handleInputChange}
-                  >
+                  <select className="form-select" name="country" value={formData.country} onChange={handleInputChange}>
                     <option value="United States">United States</option>
                     <option value="Canada">Canada</option>
                     <option value="United Kingdom">United Kingdom</option>
@@ -250,16 +520,12 @@ const Addresses = () => {
                     <option value="Germany">Germany</option>
                     <option value="France">France</option>
                     <option value="Japan">Japan</option>
+                    <option value="India">India</option>
                   </select>
                 </div>
                 <div className="col-md-6">
                   <label className="form-label fw-medium">Address Type</label>
-                  <select
-                    className="form-select"
-                    name="type"
-                    value={formData.type}
-                    onChange={handleInputChange}
-                  >
+                  <select className="form-select" name="type" value={formData.type} onChange={handleInputChange}>
                     <option value="home">Home</option>
                     <option value="work">Work</option>
                     <option value="other">Other</option>
@@ -315,29 +581,19 @@ const Addresses = () => {
                 </div>
                 <div className="address-details ps-1 mb-3">
                   <p className="card-text mb-1">{address.street}</p>
-                  <p className="card-text mb-1">{address.city}, {address.state} {address.zip}</p>
+                  <p className="card-text mb-1">
+                    {address.city}, {address.state} {address.zip}
+                  </p>
                   <p className="card-text mb-1">{address.country}</p>
                   <p className="card-text text-muted">
                     <span className="text-secondary">Phone:</span> {address.phone}
                   </p>
                 </div>
                 <div className="d-flex align-items-center gap-2 flex-wrap">
-                  <EditAddressButton
-                    addressId={address.id}
-                    onClick={() => editAddress(address.id)}
-                  />
-                  <DeleteAddressButton
-                    addressId={address.id}
-                    onClick={() => handleDeletePrompt(address.id)}
-                  />
+                  <EditAddressButton addressId={address.id} onClick={() => editAddress(address.id)} />
+                  <DeleteAddressButton addressId={address.id} onClick={() => handleDeletePrompt(address.id)} />
                   {!address.isDefault && (
-                    <SetDefaultButton
-                      addressId={address.id}
-                      onClick={() => {
-                        const updatedAddresses = setDefaultAddress(address.id);
-                        setAddresses(updatedAddresses);
-                      }}
-                    />
+                    <SetDefaultButton addressId={address.id} onClick={() => handleSetDefault(address.id)} />
                   )}
                 </div>
               </div>
@@ -345,7 +601,7 @@ const Addresses = () => {
           </div>
         ))}
       </div>
-      {addresses.length === 0 && (
+      {addresses.length === 0 && !loading && (
         <div className="text-center py-4 my-3 bg-light rounded-4 shadow-sm">
           <MapPinIcon className="text-gold mb-2" />
           <h5>No addresses saved yet</h5>
@@ -362,7 +618,7 @@ const Addresses = () => {
         confirmButtonText="Delete"
       />
 
-      <ToastContainer 
+      <ToastContainer
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}
@@ -505,7 +761,7 @@ const Addresses = () => {
         }
       `}</style>
     </div>
-  );
-};
+  )
+}
 
-export default Addresses;
+export default Addresses

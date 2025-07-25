@@ -1,38 +1,46 @@
-// src/components/CheckoutConfirmation.jsx
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { PromoNavButton, BuyNowButton } from "../components/ui/Buttons";
-import IconLink from "../components/ui/Icons";
-import PopupNotificationWrapper from "../components/PopupNotificationWrapper/PopupNotificationWrapper";
-import { getOrders } from '../data/profileData';
+"use client"
+
+import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
+import { PromoNavButton, BuyNowButton } from "../components/ui/Buttons"
+import IconLink from "../components/ui/Icons"
+import PopupNotificationWrapper from "../components/PopupNotificationWrapper/PopupNotificationWrapper"
 
 const CheckoutConfirmation = () => {
-  const navigate = useNavigate();
-  const [orderDetails, setOrderDetails] = useState(null);
-  const [showPopup, setShowPopup] = useState(false);
+  const navigate = useNavigate()
+  const [orderDetails, setOrderDetails] = useState(null)
+  const [showPopup, setShowPopup] = useState(false)
 
   useEffect(() => {
-    const lastOrder = JSON.parse(localStorage.getItem("lastOrder"));
+    // Get order details from localStorage (set during checkout)
+    const lastOrder = JSON.parse(localStorage.getItem("lastOrder"))
     if (lastOrder) {
-      setOrderDetails(lastOrder);
-      setShowPopup(true);
+      setOrderDetails(lastOrder)
+      setShowPopup(true)
+      // Clear the stored order after displaying
+      setTimeout(() => {
+        localStorage.removeItem("lastOrder")
+      }, 5000)
     } else {
-      const orders = getOrders();
-      const recentOrder = orders[orders.length - 1];
-      if (recentOrder) {
-        setOrderDetails(recentOrder);
-        setShowPopup(true);
-      }
+      // If no order found, redirect to orders page
+      navigate("/account/orders")
     }
-  }, []);
-
-  if (!orderDetails) {
-    return <div className="container my-5 text-center">No order found.</div>;
-  }
+  }, [navigate])
 
   const handlePopupClose = () => {
-    setShowPopup(false);
-  };
+    setShowPopup(false)
+  }
+
+  if (!orderDetails) {
+    return (
+      <div className="container my-5 text-center">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+        <p className="mt-2">Loading order confirmation...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="container my-5">
@@ -40,84 +48,146 @@ const CheckoutConfirmation = () => {
         <IconLink iconType="guarantee" isSupport={true} className="guarantee-icon mb-3" />
         <h1 className="mb-2">Order Confirmation</h1>
         <p className="mb-4">Thank you for your order! Your order has been successfully placed.</p>
+        <div className="alert alert-success" role="alert">
+          <strong>Order #{orderDetails.id}</strong> has been confirmed and will be processed shortly.
+        </div>
       </div>
-      <div className="order-details mb-4">
-        <h5>Order Summary</h5>
-        <div className="order-items mt-3">
-          {orderDetails.items.map((item) => (
-            <div key={item.id} className="d-flex justify-content-between mb-2">
-              <div>
-                <p className="mb-0">{item.name} (x{item.quantity})</p>
-                <p className="text-muted small">₹{item.price.toFixed(2)} each</p>
+
+      <div className="row">
+        <div className="col-lg-8 mx-auto">
+          <div className="card border-0 shadow-lg rounded-4 mb-4">
+            <div className="card-header bg-gradient text-white">
+              <h5 className="card-title mb-0">Order Summary</h5>
+            </div>
+            <div className="card-body">
+              <div className="order-items mt-3">
+                {orderDetails.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom"
+                  >
+                    <div className="d-flex align-items-center">
+                      <img
+                        src={item.image || "https://via.placeholder.com/60"}
+                        alt={item.name}
+                        className="item-image me-3"
+                      />
+                      <div>
+                        <h6 className="mb-1">{item.name}</h6>
+                        <p className="text-muted small mb-0">
+                          Quantity: {item.quantity} × ₹{item.price.toFixed(2)}
+                        </p>
+                        {(item.color || item.carat) && (
+                          <p className="text-muted small mb-0">
+                            {item.color && `Color: ${item.color}`}
+                            {item.carat && ` | Carat: ${item.carat}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-end">
+                      <p className="mb-0 fw-bold">₹{(item.price * item.quantity).toFixed(2)}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <p>₹{(item.price * item.quantity).toFixed(2)}</p>
+
+              <div className="order-totals mt-4 pt-3 border-top">
+                <div className="d-flex justify-content-between mb-2">
+                  <span>Subtotal:</span>
+                  <span>₹{orderDetails.subtotal}</span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span>Shipping:</span>
+                  <span>₹{orderDetails.shipping}</span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span>Tax:</span>
+                  <span>₹{orderDetails.tax}</span>
+                </div>
+                {Number.parseFloat(orderDetails.discount) > 0 && (
+                  <div className="d-flex justify-content-between mb-2 text-success">
+                    <span>Discount:</span>
+                    <span>-₹{orderDetails.discount}</span>
+                  </div>
+                )}
+                <hr />
+                <div className="d-flex justify-content-between fw-bold fs-5">
+                  <span>Total:</span>
+                  <span>₹{orderDetails.total}</span>
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
-        <div className="mt-3">
-          <div className="d-flex justify-content-between">
-            <p>Subtotal</p>
-            <p>₹{orderDetails.subtotal}</p>
           </div>
-          <div className="d-flex justify-content-between">
-            <p>Shipping</p>
-            <p>₹{orderDetails.shipping.toFixed(2)}</p>
-          </div>
-          <div className="d-flex justify-content-between">
-            <p>Tax</p>
-            <p>₹{orderDetails.tax}</p>
-          </div>
-          {orderDetails.discount > 0 && (
-            <div className="d-flex justify-content-between">
-              <p>Discount</p>
-              <p>-₹{orderDetails.discount}</p>
+
+          <div className="card border-0 shadow-lg rounded-4 mb-4">
+            <div className="card-header bg-gradient text-white">
+              <h5 className="card-title mb-0">Shipping Information</h5>
             </div>
-          )}
-          <div className="d-flex justify-content-between">
-            <h6>Total</h6>
-            <h6>₹{orderDetails.total}</h6>
+            <div className="card-body">
+              <div className="shipping-address">
+                <h6 className="mb-2">Delivery Address</h6>
+                <p className="mb-1">
+                  <strong>{orderDetails.shippingAddress.name}</strong>
+                </p>
+                <p className="mb-1">{orderDetails.shippingAddress.street}</p>
+                <p className="mb-1">
+                  {orderDetails.shippingAddress.city}, {orderDetails.shippingAddress.state}{" "}
+                  {orderDetails.shippingAddress.zip}
+                </p>
+                <p className="mb-1">{orderDetails.shippingAddress.country}</p>
+                <p className="mb-2">
+                  <strong>Phone:</strong> {orderDetails.shippingAddress.phone}
+                </p>
+
+                <div className="row mt-3">
+                  <div className="col-md-6">
+                    <p className="mb-1">
+                      <strong>Payment Method:</strong>{" "}
+                      {orderDetails.paymentMethod
+                        ? orderDetails.paymentMethod.replace(/([A-Z])/g, " $1").trim()
+                        : "Credit Card"}
+                    </p>
+                  </div>
+                  <div className="col-md-6">
+                    <p className="mb-1">
+                      <strong>Order Date:</strong> {new Date(orderDetails.orderDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                {orderDetails.specialInstructions && (
+                  <div className="mt-3">
+                    <p className="mb-1">
+                      <strong>Special Instructions:</strong>
+                    </p>
+                    <p className="text-muted">{orderDetails.specialInstructions}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-center">
+            <div className="d-flex gap-3 justify-content-center flex-wrap">
+              <PromoNavButton label="Continue Shopping" onClick={() => navigate("/collections")} />
+              <BuyNowButton label="View My Orders" onClick={() => navigate("/account/orders")} />
+            </div>
+
+            <div className="mt-4 p-3 bg-light rounded">
+              <p className="mb-2 fw-bold">What's Next?</p>
+              <p className="mb-1 small">• You'll receive an email confirmation shortly</p>
+              <p className="mb-1 small">• We'll notify you when your order ships</p>
+              <p className="mb-0 small">• Track your order anytime in "My Orders"</p>
+            </div>
           </div>
         </div>
       </div>
-      <div className="shipping-details mb-4">
-        <h5>Shipping Information</h5>
-        <p className="mb-1">{orderDetails.shippingAddress.name}</p>
-        <p className="mb-1">{orderDetails.shippingAddress.street}</p>
-        <p className="mb-1">
-          {orderDetails.shippingAddress.city}, {orderDetails.shippingAddress.state} {orderDetails.shippingAddress.zip}
-        </p>
-        <p className="mb-1">{orderDetails.shippingAddress.country}</p>
-        <p className="mb-1">
-          <strong>Phone:</strong> {orderDetails.shippingAddress.phone}
-        </p>
-        <p className="mb-1">
-          <strong>Payment Method:</strong>{" "}
-          {orderDetails.paymentMethod
-            ? orderDetails.paymentMethod.replace(/([A-Z])/g, " $1").trim()
-            : "Not specified"}
-        </p>
-        {orderDetails.specialInstructions && (
-          <p className="mb-1">
-            <strong>Special Instructions:</strong> {orderDetails.specialInstructions}
-          </p>
-        )}
-      </div>
-      <div className="d-flex gap-3 justify-content-center">
-        <PromoNavButton
-          label="Explore Collections"
-          onClick={() => navigate("/collections/dresses")}
-        />
-        <BuyNowButton
-          label="View Orders"
-          onClick={() => navigate("/account/orders")}
-        />
-      </div>
+
       {showPopup && orderDetails.items.length > 0 && (
-        <PopupNotificationWrapper
-          orderItem={orderDetails.items[0]}
-          onClose={handlePopupClose}
-        />
+        <PopupNotificationWrapper orderItem={orderDetails.items[0]} onClose={handlePopupClose} />
       )}
+
       <style jsx>{`
         .container {
           padding: 0 16px;
@@ -126,7 +196,7 @@ const CheckoutConfirmation = () => {
           margin: 0 auto;
         }
         h1 {
-          font-size: 1.8rem;
+          font-size: 2rem;
           font-weight: 600;
           color: #222;
         }
@@ -148,23 +218,38 @@ const CheckoutConfirmation = () => {
           font-size: 0.85rem;
           color: #666;
         }
-        .order-details,
-        .shipping-details {
-          border: 1px solid #eee;
-          padding: 20px;
-          border-radius: 8px;
-          background-color: #fff;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        .card {
+          border-radius: 12px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        .card-header.bg-gradient {
+          background: linear-gradient(135deg, #C5A47E 0%, #b58963 100%);
+          border-radius: 12px 12px 0 0;
         }
         .guarantee-icon {
           font-size: 3rem;
           color: #c5a47e;
         }
+        .item-image {
+          width: 60px;
+          height: 60px;
+          object-fit: cover;
+          border-radius: 8px;
+        }
+        .alert-success {
+          background-color: #d1edff;
+          border-color: #b8daff;
+          color: #004085;
+        }
         .d-flex.gap-3 {
           display: flex;
           gap: 15px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           justify-content: center;
+        }
+        .spinner-border {
+          width: 3rem;
+          height: 3rem;
         }
         @media (max-width: 768px) {
           .container {
@@ -188,9 +273,14 @@ const CheckoutConfirmation = () => {
           .guarantee-icon {
             font-size: 2.5rem;
           }
-          .order-details,
-          .shipping-details {
-            padding: 15px;
+          .item-image {
+            width: 50px;
+            height: 50px;
+          }
+          .d-flex.gap-3 {
+            gap: 10px;
+            flex-direction: column;
+            align-items: center;
           }
         }
         @media (max-width: 576px) {
@@ -215,18 +305,14 @@ const CheckoutConfirmation = () => {
           .guarantee-icon {
             font-size: 2rem;
           }
-          .order-details,
-          .shipping-details {
-            padding: 12px;
-          }
-          .d-flex.gap-3 {
-            gap: 10px;
-            flex-wrap: wrap;
+          .item-image {
+            width: 45px;
+            height: 45px;
           }
         }
       `}</style>
     </div>
-  );
-};
+  )
+}
 
-export default CheckoutConfirmation;
+export default CheckoutConfirmation
